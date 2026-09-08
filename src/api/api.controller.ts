@@ -122,12 +122,9 @@ export class ApiController {
     const url = process.env.WEBHOOK_URL;
     if (!url) throw new HttpException('WEBHOOK_URL not set', 500);
     const payload = body && Object.keys(body).length ? body : {
-      templateType: 'TEXT',
-      campaignName: 'workflow_template',
       templateId: process.env.TEMPLATE_ID || 'debug',
-      SKUCodes: [],
-      groupIds: [],
-      customerData: [{ name: 'DebugTest', phone: '9999999999' }],
+      name: 'DebugTest',
+      phone: '9999999999',
     };
     try {
       const res = await fetch(url, {

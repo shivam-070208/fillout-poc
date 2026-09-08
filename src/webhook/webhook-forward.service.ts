@@ -19,25 +19,16 @@ export class WebhookForwardService {
       return;
     }
 
-    const templateId = this.templateId;
+    const { templateId, name, phone } = this.extractFields(originalBody);
+
     if (!templateId) {
-      this.logger.warn('TEMPLATE_ID not set in .env, forwarding with empty templateId');
+      this.logger.warn('templateId not found in form submission, forwarding with empty templateId');
     }
 
-    const { name, phone } = this.extractNamePhone(originalBody);
-
     const payload = {
-      templateType: 'TEXT',
-      campaignName: 'workflow_template',
       templateId: templateId || '',
-      SKUCodes: [],
-      groupIds: [],
-      customerData: [
-        {
-          name: name || '',
-          phone: phone || '',
-        },
-      ],
+      name: name || '',
+      phone: phone || '',
     };
 
     this.logger.log(`Forwarding webhook for formId=${formId} to ${url} with payload ${JSON.stringify(payload).slice(0, 500)}`);
@@ -56,15 +47,18 @@ export class WebhookForwardService {
     }
   }
 
-  private extractNamePhone(body: any): { name: string; phone: string } {
-    if (!body || typeof body !== 'object') return { name: '', phone: '' };
+  private extractFields(body: any): { templateId: string; name: string; phone: string } {
+    if (!body || typeof body !== 'object') return { templateId: this.templateId || '', name: '', phone: '' };
 
-    // direct fields (if Fillout already mapped or custom)
-    if (typeof body.name === 'string' && typeof body.phone === 'string') {
-      return { name: body.name, phone: body.phone };
+    // direct fields
+    if (typeof body.templateId === 'string' || typeof body.name === 'string' || typeof body.phone === 'string') {
+      return {
+        templateId: String(body.templateId || this.templateId || ''),
+        name: String(body.name || ''),
+        phone: String(body.phone || ''),
+      };
     }
 
-    // try questions array locations
     const questions: any[] =
       body.questions ||
       body.submission?.questions ||
@@ -75,6 +69,7 @@ export class WebhookForwardService {
       [];
 
     if (Array.isArray(questions) && questions.length > 0) {
+      let templateIdVal = '';
       let nameVal = '';
       let phoneVal = '';
 
@@ -84,44 +79,58 @@ export class WebhookForwardService {
         const qType = String(q.type || '').toLowerCase();
         const val = q.value ?? q.answer ?? q.response ?? '';
 
-        // name detection
+        if (!templateIdVal && (qName.includes('template') || qId.includes('template') || qId.includes('templateid'))) {
+          templateIdVal = String(val);
+        }
         if (!nameVal && (qName.includes('name') || qId.includes('name') || qType === 'name')) {
           nameVal = String(val);
         }
-        // phone detection - check phone, mobile, number
         if (!phoneVal && (qName.includes('phone') || qName.includes('mobile') || qName.includes('number') || qId.includes('phone') || qId.includes('mobile') || qType.includes('phone'))) {
           phoneVal = String(val);
         }
       }
 
-      // fallback: if not found by name, try first two values
-      if (!nameVal && questions[0]?.value) nameVal = String(questions[0].value);
-      if (!phoneVal && questions[1]?.value) phoneVal = String(questions[1].value);
+      // also check if templateId stored as hidden field/value not in questions naming
+      if (!templateIdVal) {
+        // fallback to env or direct extraction from body string
+        const str = JSON.stringify(body);
+        const m = str.match(/"templateId"\s*:\s*"([^"]+)"/i);
+        if (m) templateIdVal = m[1];
+        else if (this.templateId) templateIdVal = this.templateId;
+      }
 
-      // also check body directly for those keys inside questions values
-      return { name: nameVal, phone: phoneVal };
+      return {
+        templateId: String(templateIdVal || this.templateId || ''),
+        name: String(nameVal || ''),
+        phone: String(phoneVal || ''),
+      };
     }
 
-    // fallback: search deep for name/phone keys in body
+    // fallback deep search
+    let templateId = body.templateId || (this.templateId as string) || '';
     let name = body.name || body.customerName || body.fullName || '';
     let phone = body.phone || body.phoneNumber || body.mobile || body.customerPhone || '';
 
-    if (!name || !phone) {
-      const str = JSON.stringify(body);
-      if (!name) {
-        const m = str.match(/"name"\s*:\s*"([^"]+)"/i);
-        if (m) name = m[1];
-      }
-      if (!phone) {
-        const m = str.match(/"phone"\s*:\s*"([^"]+)"/i);
-        if (m) phone = m[1];
-        if (!phone) {
-          const m2 = str.match(/"value"\s*:\s*"(\+?\d{7,15})"/);
-          if (m2) phone = m2[1];
-        }
-      }
+    const str = JSON.stringify(body);
+    if (!templateId) {
+      const m = str.match(/"templateId"\s*:\s*"([^"]+)"/i);
+      if (m) templateId = m[1];
+      else if (this.templateId) templateId = this.templateId;
+    }
+    if (!name) {
+      const m = str.match(/"name"\s*:\s*"([^"]+)"/i);
+      if (m) name = m[1];
+    }
+    if (!phone) {
+      const m = str.match(/"phone"\s*:\s*"([^"]+)"/i);
+      if (m) phone = m[1];
     }
 
-    return { name: String(name || ''), phone: String(phone || '') };
+    return { templateId: String(templateId || ''), name: String(name || ''), phone: String(phone || '') };
+  }
+
+  private extractNamePhone(body: any): { name: string; phone: string } {
+    const { name, phone } = this.extractFields(body);
+    return { name, phone };
   }
 }
