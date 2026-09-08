@@ -1,10 +1,14 @@
 import { Controller, All, Req, Res, Param } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { WebhookStoreService } from './webhook-store.service';
+import { WebhookForwardService } from './webhook-forward.service';
 
 @Controller('webhooks')
 export class WebhookController {
-  constructor(private readonly store: WebhookStoreService) {}
+  constructor(
+    private readonly store: WebhookStoreService,
+    private readonly forward: WebhookForwardService,
+  ) {}
 
   private parseBody(raw: any): any {
     if (typeof raw === 'string') {
@@ -46,6 +50,9 @@ export class WebhookController {
     const call = this.store.addCall(String(formId), safeHeaders, body, query as any);
     console.log(`[Webhook] Received for formId=${formId} id=${call.id}`);
 
+    // forward to WEBHOOK_URL from .env (n8n) - fire and forget
+    this.forward.forward(String(formId), body).catch((e) => console.error('forward error', e));
+
     return res.status(200).json({ received: true, id: call.id, formId });
   }
 
@@ -62,6 +69,9 @@ export class WebhookController {
     }
     const call = this.store.addCall(String(formId), safeHeaders, body, query as any);
     console.log(`[Webhook] Received for per-form ${formId} id=${call.id}`);
+
+    this.forward.forward(String(formId), body).catch((e) => console.error('forward error', e));
+
     return res.status(200).json({ received: true, id: call.id, formId });
   }
 }
