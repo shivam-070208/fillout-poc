@@ -27,10 +27,17 @@ export class WebhookForwardService {
     const { name, phone } = this.extractNamePhone(originalBody);
 
     const payload = {
+      templateType: 'TEXT',
+      campaignName: 'workflow_template',
       templateId: templateId || '',
-      name: name || '',
-      phone: phone || '',
-
+      SKUCodes: [],
+      groupIds: [],
+      customerData: [
+        {
+          name: name || '',
+          phone: phone || '',
+        },
+      ],
     };
 
     this.logger.log(`Forwarding webhook for formId=${formId} to ${url} with payload ${JSON.stringify(payload).slice(0, 500)}`);
@@ -38,13 +45,14 @@ export class WebhookForwardService {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'fillout-integration-poc/1.0' },
         body: JSON.stringify(payload),
       });
       const text = await res.text();
       this.logger.log(`Forward response ${res.status} ${text.slice(0, 1000)}`);
+      if (!res.ok) this.logger.warn(`Forward non-2xx ${res.status}`);
     } catch (e: any) {
-      this.logger.error(`Forward failed to ${url}: ${e?.message || e}`);
+      this.logger.error(`Forward failed to ${url}: ${e?.message || e} | cause: ${e?.cause?.message || e?.cause || 'n/a'} | stack: ${e?.stack?.slice(0, 500) || 'n/a'}`);
     }
   }
 
@@ -77,11 +85,11 @@ export class WebhookForwardService {
         const val = q.value ?? q.answer ?? q.response ?? '';
 
         // name detection
-        if (!nameVal && (qName.includes('Name') || qId.includes('name') || qType === 'name')) {
+        if (!nameVal && (qName.includes('name') || qId.includes('name') || qType === 'name')) {
           nameVal = String(val);
         }
         // phone detection - check phone, mobile, number
-        if (!phoneVal && (qName.includes('Phone') || qName.includes('mobile') || qName.includes('number') || qId.includes('phone') || qId.includes('mobile') || qType.includes('phone'))) {
+        if (!phoneVal && (qName.includes('phone') || qName.includes('mobile') || qName.includes('number') || qId.includes('phone') || qId.includes('mobile') || qType.includes('phone'))) {
           phoneVal = String(val);
         }
       }
