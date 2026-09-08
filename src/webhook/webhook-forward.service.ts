@@ -77,11 +77,11 @@ export class WebhookForwardService {
         const val = q.value ?? q.answer ?? q.response ?? '';
 
         // name detection
-        if (!nameVal && (qName.includes('name') || qId.includes('name') || qType === 'name')) {
+        if (!nameVal && (qName.includes('Name') || qId.includes('name') || qType === 'name')) {
           nameVal = String(val);
         }
         // phone detection - check phone, mobile, number
-        if (!phoneVal && (qName.includes('phone') || qName.includes('mobile') || qName.includes('number') || qId.includes('phone') || qId.includes('mobile') || qType.includes('phone'))) {
+        if (!phoneVal && (qName.includes('Phone') || qName.includes('mobile') || qName.includes('number') || qId.includes('phone') || qId.includes('mobile') || qType.includes('phone'))) {
           phoneVal = String(val);
         }
       }
